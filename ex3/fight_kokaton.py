@@ -141,17 +141,30 @@ class Bomb:
         screen.blit(self.img, self.rct)
 
 
+class Score:
+    """
+    打ち落とした爆弾の数を表示するスコアに関するクラス
+    """
+    def __init__(self):
+        self.font = pg.font.SysFont("hgp創英角ﾎﾟｯﾌﾟ体", 60)  # 大きめの文字
+        self.color = (0, 0, 0)  # 黒色
+        self.score = 0
+        self.img = self.font.render(f"SCORE: {self.score}", 0, self.color)
+        self.rct = self.img.get_rect()
+        self.rct.center = (WIDTH // 2, HEIGHT // 2)  # 画面のど真ん中
+
+    def update(self, screen: pg.Surface):
+        self.img = self.font.render(f"SCORE: {self.score}", 0, self.color)
+        screen.blit(self.img, self.rct)
+
+
 def main():
     pg.display.set_caption("たたかえ！こうかとん")
     screen = pg.display.set_mode((WIDTH, HEIGHT))    
     bg_img = pg.image.load("fig/pg_bg.jpg")
     bird = Bird((300, 200))
-    # bomb = Bomb((255, 0, 0), 10)
-    # bombs = []
-    # for _ in range(NUM_OF_BOMBS):
-    #     bomb = Bomb((255, 0, 0), 10)
-    #     bombs.append(bomb)
     bombs = [Bomb((255, 0, 0), 10) for _ in range(NUM_OF_BOMBS)]
+    score = Score()  # スコアの初期化
 
     beam = None  # ゲーム初期化時にはビームは存在しない
     clock = pg.time.Clock()
@@ -163,6 +176,8 @@ def main():
             if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
                 # スペースキー押下でBeamクラスのインスタンス生成
                 beam = Beam(bird)            
+        
+        # 1. 背景を描く（これより下に書いたものが上に重なります）
         screen.blit(bg_img, [0, 0])
         
         for bomb in bombs:
@@ -180,6 +195,7 @@ def main():
                     pg.display.update()
                     beam = None
                     bombs[i] = None
+                    score.score += 1  # 撃ち落としたらスコア加算
         bombs = [bomb for bomb in bombs if bomb is not None]
 
         key_lst = pg.key.get_pressed()
@@ -188,6 +204,11 @@ def main():
             beam.update(screen)   
         for bomb in bombs:
             bomb.update(screen)
+            
+        # 2. キャラクターたちのさらに上にスコアを描く
+        score.update(screen)
+        
+        # 3. 最後に画面を更新
         pg.display.update()
         tmr += 1
         clock.tick(50)
