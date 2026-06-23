@@ -2,6 +2,7 @@ import os
 import random
 import sys
 import time
+import math  # 追加：ビームの回転計算用
 import pygame as pg
 
 
@@ -25,6 +26,7 @@ def check_bound(obj_rct: pg.Rect) -> tuple[bool, bool]:
     return yoko, tate
 
 
+# 指定：【Birdクラスの改良】
 class Bird:
     """
     ゲームキャラクター（こうかとん）に関するクラス
@@ -56,6 +58,8 @@ class Bird:
         self.img = __class__.imgs[(+5, 0)]
         self.rct: pg.Rect = self.img.get_rect()
         self.rct.center = xy
+        # 指定：こうかとんの向きを表すタプル（デフォルト右向き）
+        self.dire = (+5, 0)  
 
     def change_img(self, num: int, screen: pg.Surface):
         """
@@ -80,25 +84,41 @@ class Bird:
         self.rct.move_ip(sum_mv)
         if check_bound(self.rct) != (True, True):
             self.rct.move_ip(-sum_mv[0], -sum_mv[1])
+        
+        # 指定：合計移動量sum_mvが[0,0]でない時，self.direをsum_mvの値で更新
         if not (sum_mv[0] == 0 and sum_mv[1] == 0):
             self.img = __class__.imgs[tuple(sum_mv)]
+            self.dire = tuple(sum_mv)  # 向きのタプルを更新
+            
         screen.blit(self.img, self.rct)
 
 
+# 指定：【Beamクラスの改良】
 class Beam:
     """
     こうかとんが放つビームに関するクラス
     """
-    def __init__(self, bird:"Bird"):
+    def __init__(self, bird: "Bird"):
         """
         ビーム画像Surfaceを生成する
         引数 bird：ビームを放つこうかとん（Birdインスタンス）
         """
-        self.img = pg.image.load(f"fig/beam.png")
+        # 指定：Birdのdireにアクセスし，こうかとんが向いている方向をvx, vyに代入
+        self.vx, self.vy = bird.dire
+        
+        # 指定：角度の計算と画像の回転(rotozoom)
+        theta = math.atan2(-self.vy, self.vx)  # 直交座標から極座標の角度Θに変換
+        angle = math.degrees(theta)  # 弧度法から度数法に変換
+        img_orig = pg.image.load("fig/beam.png")
+        self.img = pg.transform.rotozoom(img_orig, angle, 1.0)
+        
         self.rct = self.img.get_rect()
-        self.rct.centery = bird.rct.centery  
-        self.rct.left = bird.rct.right  
-        self.vx, self.vy = +5, 0
+        
+        # 指定：【ビームの位置ずれを調整】
+        # ビームの中心横座標＝こうかとんの中心横座標 ＋ こうかとんの横幅 × ビームの横速度 ÷ ５
+        # ビームの中心縦座標＝こうかとんの中心縦座標 ＋ こうかとんの高さ × ビームの縦速度 ÷ ５
+        self.rct.centerx = bird.rct.centerx + (bird.rct.width * self.vx / 5)
+        self.rct.centery = bird.rct.centery + (bird.rct.height * self.vy / 5)
 
     def update(self, screen: pg.Surface):
         """
@@ -115,11 +135,6 @@ class Bomb:
     爆弾に関するクラス
     """
     def __init__(self, color: tuple[int, int, int], rad: int):
-        """
-        引数に基づき爆弾円Surfaceを生成する
-        引数1 color：爆弾円の色タプル
-        引数2 rad：爆弾円の半径
-        """
         self.img = pg.Surface((2*rad, 2*rad))
         pg.draw.circle(self.img, color, (rad, rad), rad)
         self.img.set_colorkey((0, 0, 0))
@@ -128,10 +143,6 @@ class Bomb:
         self.vx, self.vy = +5, +5
 
     def update(self, screen: pg.Surface):
-        """
-        爆弾を速度ベクトルself.vx, self.vyに基づき移動させる
-        引数 screen：画面Surface
-        """
         yoko, tate = check_bound(self.rct)
         if not yoko:
             self.vx *= -1
@@ -158,39 +169,21 @@ class Score:
         screen.blit(self.img, self.rct)
 
 
-# 指定：【Explosionクラス】
 class Explosion:
     """
     爆弾が爆発したときのエフェクトに関するクラス
     """
     def __init__(self, bomb: "Bomb"):
-        """
-        爆発エフェクトを生成する
-        引数 bomb：爆発した爆弾（Bombインスタンス）
-        """
-        # 指定：元のexplosion.gifと上下左右にflipしたものの2つのSurfaceをリストに格納
         img_orig = pg.image.load("fig/explosion.gif")
-        img_flip = pg.transform.flip(img_orig, True, True)  # 上下左右反転
+        img_flip = pg.transform.flip(img_orig, True, True)  
         self.imgs = [img_orig, img_flip]
-        
-        # 指定：爆発した爆弾のrct.centerに座標を設定
         self.rct = img_orig.get_rect()
         self.rct.center = bomb.rct.center
-        
-        # 指定：表示時間（爆発時間）lifeを設定
-        self.life = 40  # 40フレームの間表示（約0.8秒）
+        self.life = 40  
 
     def update(self, screen: pg.Surface):
-        """
-        爆発経過時間を減算し、正なら画面に描画する
-        引数 screen：画面Surface
-        """
-        # 指定：爆発経過時間lifeを1減算
         self.life -= 1
-        
-        # 指定：爆発経過時間lifeが正なら，Surfaceリストを交互に切り替えて爆発を演出
         if self.life > 0:
-            # 工夫：目がチラチラしないように10フレーム毎に画像を交互に切り替える
             img_idx = (self.life // 10) % 2
             screen.blit(self.imgs[img_idx], self.rct)
 
@@ -203,8 +196,6 @@ def main():
     bombs = [Bomb((255, 0, 0), 10) for _ in range(NUM_OF_BOMBS)]
     score = Score()  
     beams = []  
-
-    # 指定：【main関数(初期化)】Explosionインスタンス用の空リストを作る
     explosions = []  
 
     clock = pg.time.Clock()
@@ -231,18 +222,13 @@ def main():
                     if bomb is not None:
                         if beam.rct.colliderect(bomb.rct):  
                             bird.change_img(6, screen)
-                            
-                            # 指定：【main関数(ループ)】bombとbeamが衝突したらExplosionインスタンスを生成，リストにappend
                             explosions.append(Explosion(bomb))
-                            
                             beams[j] = None  
                             bombs[i] = None  
                             score.score += 1  
         
         bombs = [bomb for bomb in bombs if bomb is not None]
         beams = [beam for beam in beams if beam is not None and check_bound(beam.rct) == (True, True)]
-        
-        # 指定：【main関数(ループ)】lifeが0より大きいExplosionインスタンスだけのリストにする
         explosions = [exp for exp in explosions if exp.life > 0]
 
         key_lst = pg.key.get_pressed()
@@ -254,7 +240,6 @@ def main():
         for bomb in bombs:
             bomb.update(screen)
             
-        # 指定：【main関数(ループ)】updateメソッドを呼び出して爆発を描画
         for exp in explosions:
             exp.update(screen)
             
