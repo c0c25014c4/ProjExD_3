@@ -26,7 +26,6 @@ def check_bound(obj_rct: pg.Rect) -> tuple[bool, bool]:
     return yoko, tate
 
 
-# 指定：【Birdクラスの改良】
 class Bird:
     """
     ゲームキャラクター（こうかとん）に関するクラス
@@ -51,31 +50,16 @@ class Bird:
     }
 
     def __init__(self, xy: tuple[int, int]):
-        """
-        こうかとん画像Surfaceを生成する
-        引数 xy：こうかとん画像の初期位置座標タプル
-        """
         self.img = __class__.imgs[(+5, 0)]
         self.rct: pg.Rect = self.img.get_rect()
         self.rct.center = xy
-        # 指定：こうかとんの向きを表すタプル（デフォルト右向き）
         self.dire = (+5, 0)  
 
     def change_img(self, num: int, screen: pg.Surface):
-        """
-        こうかとん画像を切り替え，画面に転送する
-        引数1 num：こうかとん画像ファイル名の番号
-        引数2 screen：画面Surface
-        """
         self.img = pg.transform.rotozoom(pg.image.load(f"fig/{num}.png"), 0, 0.9)
         screen.blit(self.img, self.rct)
 
     def update(self, key_lst: list[bool], screen: pg.Surface):
-        """
-        押下キーに応じてこうかとんを移動させる
-        引数1 key_lst：押下キーの真理値リスト
-        引数2 screen：画面Surface
-        """
         sum_mv = [0, 0]
         for k, mv in __class__.delta.items():
             if key_lst[k]:
@@ -85,46 +69,29 @@ class Bird:
         if check_bound(self.rct) != (True, True):
             self.rct.move_ip(-sum_mv[0], -sum_mv[1])
         
-        # 指定：合計移動量sum_mvが[0,0]でない時，self.direをsum_mvの値で更新
         if not (sum_mv[0] == 0 and sum_mv[1] == 0):
             self.img = __class__.imgs[tuple(sum_mv)]
-            self.dire = tuple(sum_mv)  # 向きのタプルを更新
+            self.dire = tuple(sum_mv)  
             
         screen.blit(self.img, self.rct)
 
 
-# 指定：【Beamクラスの改良】
 class Beam:
     """
     こうかとんが放つビームに関するクラス
     """
     def __init__(self, bird: "Bird"):
-        """
-        ビーム画像Surfaceを生成する
-        引数 bird：ビームを放つこうかとん（Birdインスタンス）
-        """
-        # 指定：Birdのdireにアクセスし，こうかとんが向いている方向をvx, vyに代入
         self.vx, self.vy = bird.dire
-        
-        # 指定：角度の計算と画像の回転(rotozoom)
-        theta = math.atan2(-self.vy, self.vx)  # 直交座標から極座標の角度Θに変換
-        angle = math.degrees(theta)  # 弧度法から度数法に変換
+        theta = math.atan2(-self.vy, self.vx)  
+        angle = math.degrees(theta)  
         img_orig = pg.image.load("fig/beam.png")
         self.img = pg.transform.rotozoom(img_orig, angle, 1.0)
         
         self.rct = self.img.get_rect()
-        
-        # 指定：【ビームの位置ずれを調整】
-        # ビームの中心横座標＝こうかとんの中心横座標 ＋ こうかとんの横幅 × ビームの横速度 ÷ ５
-        # ビームの中心縦座標＝こうかとんの中心縦座標 ＋ こうかとんの高さ × ビームの縦速度 ÷ ５
         self.rct.centerx = bird.rct.centerx + (bird.rct.width * self.vx / 5)
         self.rct.centery = bird.rct.centery + (bird.rct.height * self.vy / 5)
 
     def update(self, screen: pg.Surface):
-        """
-        ビームを速度ベクトルself.vx, self.vyに基づき移動させる
-        引数 screen：画面Surface
-        """
         if check_bound(self.rct) == (True, True):
             self.rct.move_ip(self.vx, self.vy)
             screen.blit(self.img, self.rct)    
@@ -209,9 +176,16 @@ def main():
         
         screen.blit(bg_img, [0, 0])
         
+        # 復活部分：爆弾とこうかとんが衝突した時の処理
         for bomb in bombs:
             if bird.rct.colliderect(bomb.rct):
-                bird.change_img(8, screen)
+                bird.change_img(8, screen) # 泣いてる画像
+                
+                # 練習4の「Game Over」文字表示をここに復活！
+                fonto = pg.font.Font(None, 80)
+                txt = fonto.render("Game Over", True, (255, 0, 0))
+                screen.blit(txt, [WIDTH // 2 - 150, HEIGHT // 2])
+                
                 pg.display.update()
                 time.sleep(1)
                 return
