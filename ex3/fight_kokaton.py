@@ -96,8 +96,8 @@ class Beam:
         """
         self.img = pg.image.load(f"fig/beam.png")
         self.rct = self.img.get_rect()
-        self.rct.centery = bird.rct.centery  # ビームの中心縦座標 = こうかとんの中心縦座標
-        self.rct.left = bird.rct.right  # ビームの左座標 = こうかとんの右座標
+        self.rct.centery = bird.rct.centery  
+        self.rct.left = bird.rct.right  
         self.vx, self.vy = +5, 0
 
     def update(self, screen: pg.Surface):
@@ -146,16 +146,53 @@ class Score:
     打ち落とした爆弾の数を表示するスコアに関するクラス
     """
     def __init__(self):
-        self.font = pg.font.SysFont("hgp創英角ﾎﾟｯﾌﾟ体", 60)  # 大きめの文字
-        self.color = (0, 0, 0)  # 黒色
+        self.fonto = pg.font.Font(None, 50) 
+        self.color = (0, 0, 255)  
         self.score = 0
-        self.img = self.font.render(f"SCORE: {self.score}", 0, self.color)
+        self.img = self.fonto.render(f"SCORE: {self.score}", 0, self.color)
         self.rct = self.img.get_rect()
-        self.rct.center = (WIDTH // 2, HEIGHT // 2)  # 画面のど真ん中
+        self.rct.center = (100, HEIGHT - 50)  
 
     def update(self, screen: pg.Surface):
-        self.img = self.font.render(f"SCORE: {self.score}", 0, self.color)
+        self.img = self.fonto.render(f"SCORE: {self.score}", 0, self.color)
         screen.blit(self.img, self.rct)
+
+
+# 指定：【Explosionクラス】
+class Explosion:
+    """
+    爆弾が爆発したときのエフェクトに関するクラス
+    """
+    def __init__(self, bomb: "Bomb"):
+        """
+        爆発エフェクトを生成する
+        引数 bomb：爆発した爆弾（Bombインスタンス）
+        """
+        # 指定：元のexplosion.gifと上下左右にflipしたものの2つのSurfaceをリストに格納
+        img_orig = pg.image.load("fig/explosion.gif")
+        img_flip = pg.transform.flip(img_orig, True, True)  # 上下左右反転
+        self.imgs = [img_orig, img_flip]
+        
+        # 指定：爆発した爆弾のrct.centerに座標を設定
+        self.rct = img_orig.get_rect()
+        self.rct.center = bomb.rct.center
+        
+        # 指定：表示時間（爆発時間）lifeを設定
+        self.life = 40  # 40フレームの間表示（約0.8秒）
+
+    def update(self, screen: pg.Surface):
+        """
+        爆発経過時間を減算し、正なら画面に描画する
+        引数 screen：画面Surface
+        """
+        # 指定：爆発経過時間lifeを1減算
+        self.life -= 1
+        
+        # 指定：爆発経過時間lifeが正なら，Surfaceリストを交互に切り替えて爆発を演出
+        if self.life > 0:
+            # 工夫：目がチラチラしないように10フレーム毎に画像を交互に切り替える
+            img_idx = (self.life // 10) % 2
+            screen.blit(self.imgs[img_idx], self.rct)
 
 
 def main():
@@ -164,9 +201,12 @@ def main():
     bg_img = pg.image.load("fig/pg_bg.jpg")
     bird = Bird((300, 200))
     bombs = [Bomb((255, 0, 0), 10) for _ in range(NUM_OF_BOMBS)]
-    score = Score()  # スコアの初期化
+    score = Score()  
+    beams = []  
 
-    beam = None  # ゲーム初期化時にはビームは存在しない
+    # 指定：【main関数(初期化)】Explosionインスタンス用の空リストを作る
+    explosions = []  
+
     clock = pg.time.Clock()
     tmr = 0
     while True:
@@ -174,41 +214,52 @@ def main():
             if event.type == pg.QUIT:
                 return
             if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
-                # スペースキー押下でBeamクラスのインスタンス生成
-                beam = Beam(bird)            
+                beams.append(Beam(bird))            
         
-        # 1. 背景を描く（これより下に書いたものが上に重なります）
         screen.blit(bg_img, [0, 0])
         
         for bomb in bombs:
             if bird.rct.colliderect(bomb.rct):
-                # ゲームオーバー時に，こうかとん画像を切り替え，1秒間表示させる
                 bird.change_img(8, screen)
                 pg.display.update()
                 time.sleep(1)
                 return
         
-        for i, bomb in enumerate(bombs):
+        for j, beam in enumerate(beams):
             if beam is not None:
-                if beam.rct.colliderect(bomb.rct):  # ビームで爆弾を撃ち落としたら
-                    bird.change_img(6, screen)
-                    pg.display.update()
-                    beam = None
-                    bombs[i] = None
-                    score.score += 1  # 撃ち落としたらスコア加算
+                for i, bomb in enumerate(bombs):
+                    if bomb is not None:
+                        if beam.rct.colliderect(bomb.rct):  
+                            bird.change_img(6, screen)
+                            
+                            # 指定：【main関数(ループ)】bombとbeamが衝突したらExplosionインスタンスを生成，リストにappend
+                            explosions.append(Explosion(bomb))
+                            
+                            beams[j] = None  
+                            bombs[i] = None  
+                            score.score += 1  
+        
         bombs = [bomb for bomb in bombs if bomb is not None]
+        beams = [beam for beam in beams if beam is not None and check_bound(beam.rct) == (True, True)]
+        
+        # 指定：【main関数(ループ)】lifeが0より大きいExplosionインスタンスだけのリストにする
+        explosions = [exp for exp in explosions if exp.life > 0]
 
         key_lst = pg.key.get_pressed()
         bird.update(key_lst, screen)
-        if beam is not None:  # beamが出現していたら
+        
+        for beam in beams:
             beam.update(screen)   
+            
         for bomb in bombs:
             bomb.update(screen)
             
-        # 2. キャラクターたちのさらに上にスコアを描く
+        # 指定：【main関数(ループ)】updateメソッドを呼び出して爆発を描画
+        for exp in explosions:
+            exp.update(screen)
+            
         score.update(screen)
         
-        # 3. 最後に画面を更新
         pg.display.update()
         tmr += 1
         clock.tick(50)
